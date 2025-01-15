@@ -1,7 +1,8 @@
 #include "main.h" 
+#include <mpi.h>
 
-void load_data() {
-    FILE * fp = fopen("data.txt", "r"); 
+void load_data(char* filename) {
+    FILE * fp = fopen(filename, "r"); 
     for (int i = 0; i < SIZE; i++) 
         for (int j = 0; j < SIZE; j++) { 
             fscanf(fp, "%lf", &matrix[i][j]); 
@@ -17,10 +18,9 @@ void init() {
         invMatrix[i][i] = 1.0;
 }
 
-void* invert_matrix(void* thread_data) {
-    pthrData *data = (pthrData*) thread_data; 
-    int start = data->sigment * (SIZE / THREADS); 
-    int end = (data->sigment + 1) * (SIZE / THREADS);
+void invert_matrix(int rank, int num_procs) {
+    int start = rank * (SIZE / num_procs); 
+    int end = (rank + 1) * (SIZE / num_procs);
 
     for (int i = start; i < end; i++) { 
         double pivot = matrix[i][i]; 
@@ -28,7 +28,7 @@ void* invert_matrix(void* thread_data) {
             matrix[i][j] /= pivot;
             invMatrix[i][j] /= pivot;
         }
-        
+
         for (int j = 0; j < SIZE; j++) {
             if (i != j) {
                 double factor = matrix[j][i];
@@ -39,36 +39,52 @@ void* invert_matrix(void* thread_data) {
             }
         }
     }
-    pthread_exit(0); 
 }
 
-void step(int step) {
-    pthread_t threads[THREADS]; 
-    pthrData threadData[THREADS]; 
-
+void step(int step, int rank, int num_procs) {
     for (int count = 0; count < step; count++) {
-        for(int i = 0; i < THREADS; i++) {
-            threadData[i].sigment = i;
-            pthread_create(&(threads[i]), NULL, invert_matrix, &threadData[i]); 
-        }
-
-        for(int i = 0; i < THREADS; i++) 
-            pthread_join(threads[i], NULL);
+        invert_matrix(rank, num_procs);
     }
 }
 
 void outputData() {
-    for (int i = 0; i < SIZE; i++) {
-        for (int j = 0; j < SIZE; j++) {
-            printf("%lf ", invMatrix[i][j]);
+    if (rank == 0) {
+        printf("Inverted Matrix:\n");
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++) {
+                printf("%lf ", invMatrix[i][j]);
+            }
+            printf("\n");
         }
     }
 }
 
-int main() {
-    load_data();
-    init();
-    step(STEP); 
-    outputData();
+int main(int argc, char** argv) {
+    int rank, num_procs;
+    double time_spent = 0.0; 
+    clock_t begin = clock();
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
+    if (argc != 2) {
+        if (rank == 0) {
+            printf("Usage: mpirun -n <num_processes> ./prog <data_file>\n");
+        }
+        MPI_Finalize();
+        return -1;
+    }
+
+    load_data(argv[1]);  
+
+    init();  
+
+    step(STEP, rank, num_procs);  
+
+    outputData();  
+    }
+
+    MPI_Finalize();
     return 0;
 }

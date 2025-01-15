@@ -5,23 +5,17 @@
 #include <stdlib.h> 
 #include <time.h> 
 #include <math.h> 
-#include <pthread.h> 
+#include <mpi.h> 
 
-#define SIZE 512
-#define THREADS 32
+#define SIZE 256 
 
 double matrix[SIZE][SIZE]; 
 double invMatrix[SIZE][SIZE]; 
 
-//структура для данных потока 
-typedef struct { 
-    int sigment; 
-} pthrData; 
-
-void load_data(); 
+void load_data(char* filename); 
 void init(); 
-void* invert_matrix(void* thread_data); 
-void step(int step); 
+void invert_matrix(int rank, int num_procs); 
+void step(int step, int rank, int num_procs); 
 void outputData(); 
 
 #endif /* MAIN_H_ */
